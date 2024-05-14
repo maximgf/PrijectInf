@@ -12,13 +12,15 @@
         <input type="submit" value="Show table">
     </form>
     {% if authors %}
-        <h2>Authors for {{ username }}</h2>
+        <h2>Requests for {{ username }}</h2>
         <table>
             <thead>
                 <tr>
                     <th>Usename</th>
                     <th>First Name</th>
                     <th>Last Name</th>
+                    <th>Date request</th>
+                    <th>Completed</th>
                 </tr>
             </thead>
             <tbody>
@@ -27,10 +29,17 @@
                         <td>{{ author.username }}</td>
                         <td>{{ author.first_name }}</td>
                         <td>{{ author.last_name }}</td>
+                        <td>{{ author.created_at }}</td>
+                        {% if authors.completed %}
+                            <td> yes </td>
+                        {% else %}
+                            <td>no</td>
+                        {% endif %}
                     </tr>
                 {% endfor %}
             </tbody>
         </table>
+
     {% endif %}
 </body>
 </html>

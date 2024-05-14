@@ -1,5 +1,5 @@
 from flask import Flask
-from flask import render_template
+from flask import render_template,abort
 from flask import request
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import Column, String, Boolean, DateTime
@@ -31,25 +31,26 @@ class Add_author(db.Model):
     created_at = Column(DateTime)
     completed_at = Column(DateTime)
     completed_by = Column(String)
+    
 with app.app_context():
     db.create_all()
-@app.route('/author',methods = ['GET'])
-def show_form_author():
-    return render_template('AddAuthor.html')
 
 
-@app.route('/submitauthor', methods=['POST'])
+
+@app.route('/author', methods=['POST','GET'])
 def Add_author_func():
-    new_task = Add_author(id = str(uuid.uuid4()),
-                          username = username, 
-                          requested_by = uid,
-                          first_name = request.form['nameauthor'],
-                          last_name = request.form['surnameauthor'],
-                          completed = False,
-                          created_at = datetime.date.today()
-                         )
-    db.session.add(new_task)
-    db.session.commit()
+    if request.method == 'POST':
+        new_task = Add_author(id = str(uuid.uuid4()),
+                            username = username, 
+                            requested_by = uid,
+                            first_name = request.form['nameauthor'],
+                            last_name = request.form['surnameauthor'],
+                            completed = False,
+                            created_at = datetime.datetime.utcnow().replace(microsecond=0)
+                            )
+        db.session.add(new_task)
+        db.session.commit()
+        return render_template('AddAuthor.html')
     return render_template('AddAuthor.html')
 
 
@@ -57,11 +58,13 @@ def Add_author_func():
 def show_table():
     if request.method == 'POST':
         username = request.form['username']
-        # Получаем все строки из таблицы, где requested_by совпадает с username
         authors = Add_author.query.filter_by(username=username).all()
-        return render_template('authors_table.html', username=username, authors=authors)
-    else:
-        return render_template('authors_table.html')
+        print(authors)
+        if authors:
+            return render_template('authors_table.html', username=username, authors=authors)
+        else:
+            abort(404)
+    return render_template('authors_table.html')
 
 
 if __name__ == '__main__':
