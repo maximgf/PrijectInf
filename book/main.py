@@ -6,13 +6,40 @@ from sqlalchemy import Column, String, Boolean, DateTime
 import datetime
 import uuid
 import re
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity,get_jwt_header,get_jwt
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+import time
 
 
+
+@event.listens_for(Engine, "before_cursor_execute")
+def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    conn.info.setdefault('query_start_time', []).append(time.time())
+    print(f"\nStarting query at {datetime.datetime.now()}")
+
+@event.listens_for(Engine, "after_cursor_execute")
+def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+    start_time = sum(conn.info.pop('query_start_time', []))
+    execution_time = time.time() - start_time
+    print(f"\nQuery executed at {datetime.datetime.now()}.")
+    print(f"\nTime taken: {execution_time} seconds")
+    print(f"\nSQL Query: {statement}")
+    if parameters:
+        print(f"\nParameters: {parameters}")
+
+secret = 'pidorasipidorasipidorasipidorasi'
 
 app = Flask(__name__)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///book.db'
+app.config['JWT_SECRET_KEY'] = secret  # Используйте ваш секретный ключ
+#app.config['JWT_IDENTITY_CLAIM'] = "0"
+
+jwt = JWTManager(app)
 db = SQLAlchemy(app)
+status_key = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+username_key = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'
 
 
 class Add_book(db.Model):
@@ -45,18 +72,20 @@ with app.app_context():
 
 
 @app.route('/add_book', methods=['POST'])
-def Add_author_func():
-
-    data = request.get_json()
+@jwt_required()
+def Add_book_func():
+    current_user = get_jwt()
     id = str(uuid.uuid4())
-    ISBN = data.get("ISBN")
+    ISBN = current_user.get("ISBN")
 
-    if (re.search(r'[а-яА-Я]', ISBN)) or (len(ISBN) > 17) or (re.search(r'[a-zA-Z]', ISBN)):
+
+    if ISBN is None  or ((re.search(r'[а-яА-Я]', ISBN)) or (len(ISBN) > 17) or (re.search(r'[a-zA-Z]', ISBN))):
         return jsonify({"error": "ISBN is not valid"}), 400
+
     
     new_task = Add_book(id = id,
-                        username = data.get("username"), 
-                        requested_by = data.get("requested_by"),
+                        username = current_user.get(username_key), 
+                        requested_by = current_user.get("sub"),
                         ISBN = ISBN,
                         completed = False,
                         created_at = datetime.datetime.utcnow().replace(microsecond=0)
@@ -69,68 +98,73 @@ def Add_author_func():
 
 
 
-@app.route('/all_user_request_book', methods=['POST'])
-def all_user_request():
-
-    username = request.args.get("username")
-    authors = Add_book.query.filter_by(username=username).all()
-    
-    if authors:
-    
-        authors = [author.to_dict() for author in authors]
-        return jsonify(authors),200
-    
-    else:
-        return jsonify({"error": "Requests not found"}), 404
-
-@app.route('/n_last_requests_book', methods=['POST'])
-def n_last_requests():
-    
-    #/nlastrequests?complete=1
+@app.route('/', methods=['GET'])
+@jwt_required()
+def request_output():
+    current_user = get_jwt()
+    username = request.args.get(username_key)
     complete = request.args.get("complete")
     n = request.args.get("count")
+
     if n is None:
         n = 1
+    if current_user.get(status_key) != 'admin':
 
-    if complete != None:
-        requests = Add_book.query.filter(Add_book.completed == complete).order_by(Add_book.created_at.desc()).limit(n).all()
-    else:
-        requests = Add_book.query.order_by(Add_book.created_at.desc()).limit(n).all()
-
-    if requests:
+        books = Add_book.query.filter_by(username=username).order_by(Add_book.created_at.desc()).limit(n).all()
+        if books:
         
-        requests = [reques.to_dict() for reques in requests]
-        return jsonify(requests), 200
-    
+            books = [book.to_dict() for book in books]
+            return jsonify(books),200
+        
+        else:
+            return jsonify({"error": "No requests found"}), 404
     else:
-        return jsonify({"error": "No requests found"}), 404
+
+
+        if complete is not None and complete in ['True', 'False']:
+            complete = complete == 'True'  # Преобразуем строку в булево значение
+            requests = Add_book.query.filter(Add_book.completed == complete).order_by(Add_book.created_at.desc()).limit(n).all()
+        else:
+            requests = Add_book.query.order_by(Add_book.created_at.desc()).limit(n).all()
+
+        if requests:
+            requests = [reques.to_dict() for reques in requests]
+            return jsonify(requests), 200
+        else:
+            return jsonify({"error": "No requests found"}), 404
     
 
-@app.route('/mark_book', methods=['POST'])
+@app.route('/', methods=['PATCH'])
+@jwt_required()
 def mark():
-    id = request.args.get("id")
-    print(id)
-    user_id = request.args.get("user_id")   
+    current_user = get_jwt()
+    if current_user.get(status_key) == 'admin':
+        id = request.args.get("id")
+        user_id = current_user.get("sub")  
 
-    reques = Add_book.query.filter_by(id=id).first()
-    if reques is None:
-        return jsonify({"error": "Request is None"}), 404
-    if reques.completed:
-        return jsonify({"error": "Request is completed"}), 404 
-    
-    if reques:
- 
-        reques.completed = True
-        reques.completed_at = datetime.datetime.utcnow().replace(microsecond=0)
-        reques.completed_by = user_id
+        reques = Add_book.query.filter_by(id=id).first()
+
+        if reques is None:
+            return jsonify({"error": "Request not found"}), 404
+
+        if reques.completed:
+            return jsonify({"error": "Request is completed"}), 404 
         
-
-        db.session.commit()
-
-        return jsonify({"message": "Request marked successfully"}), 200
+        if reques:
     
+            reques.completed = True
+            reques.completed_at = datetime.datetime.utcnow().replace(microsecond=0)
+            reques.completed_by = user_id
+            
+
+            db.session.commit()
+
+            return jsonify({"message": "Request marked successfully"}), 200
+        
+        else:
+            return jsonify({"error": "Request not found"}), 404
     else:
-        return jsonify({"error": "Request not found"}), 404   
+        return jsonify({"error": "Not prav"}), 404 
     
 
 
