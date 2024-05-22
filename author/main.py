@@ -69,8 +69,23 @@ class Add_author(db.Model):
 with app.app_context():
     if not db.engine.dialect.has_table(db.engine.connect(), "add_author"):
         db.create_all()
+aout = ["Харуки","Аркадий","Михаил","Рюноске","Александр","Валентин","Николай","Федор","Михаил","Анджей"]
 
-
+aout_last = ["Мураками","Стругацкий","Булгаков","Акутагава","Пушкин","Распутин","Гоголь","Достоевский","Лермонтов","Сапковский"]
+for i in range(10):
+    id = str(uuid.uuid4())
+    sub = str(uuid.uuid4())
+    new_task = Add_author(id = id,
+                        username = "masya", 
+                        requested_by = sub,
+                        first_name = aout[i],
+                        last_name = aout_last[i],
+                        completed = False,
+                        created_at = datetime.datetime.utcnow().replace(microsecond=0)
+                        )
+    
+    db.session.add(new_task)
+    db.session.commit()
 
 @app.route('/add_author', methods=['POST'])
 @jwt_required()
