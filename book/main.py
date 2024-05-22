@@ -70,6 +70,20 @@ with app.app_context():
         db.create_all()
 
 
+ISBN_DATA = ["978-5-699-12016-7","978-5-699-12014-9","978-5-699-12017-7","978-5-699-15014-7","978-5-699-12514-7","978-5-699-12014-3","978-5-699-12014-2","978-5-699-12014-1","978-5-699-12014-7","978-5-695-12014-7",]
+for i in range(10):
+    id = str(uuid.uuid4())
+    sub = str(uuid.uuid4())
+    new_task = Add_author(id = id,
+                        username = "masya", 
+                        requested_by = sub,
+                        ISBN = ISBN_DATA[I],
+                        completed = False,
+                        created_at = datetime.datetime.utcnow().replace(microsecond=0)
+                        )
+    
+    db.session.add(new_task)
+    db.session.commit()
 
 @app.route('/add_book', methods=['POST'])
 @jwt_required()
